@@ -32,7 +32,8 @@ struct msg_channel_st
 struct msg_listentry_st
 {
     chnid_t chnid;
-    uint8_t desc[1];                                //描述
+    uint16_t len;                   //当前结构体多大
+    uint8_t desc[1];                //描述
 }__attribute__((packed));
 
 

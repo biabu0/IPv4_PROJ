@@ -173,7 +173,7 @@ static int open_next(chnid_t chnid)
 			break;								//读取完最后一个mp3文件，结束
 		}
 		close(channel[chnid].fd);
-		channel[chnid].fd = open(channel[chnid].mp3glob.gl_pathv[channel[chnid].pos], O_RDWR);
+		channel[chnid].fd = open(channel[chnid].mp3glob.gl_pathv[channel[chnid].pos], O_RDONLY);
 		//打不开换下一个
 		if(channel[chnid].fd < 0){
 			syslog(LOG_WARNING, "[medialib][open_next] open(%s), fail:%s", channel[chnid].mp3glob.gl_pathv[channel[chnid].pos], strerror(errno));
@@ -183,7 +183,7 @@ static int open_next(chnid_t chnid)
 			return 0;
 		}
 	}
-	syslog(LOG_DEBUG, "[medialib][open_next] None of mp3s in channel %d id available.", chnid);
+	syslog(LOG_ERR, "[medialib][open_next] None of mp3s in channel %d id available.", chnid);
 	return -1;
 	
 }
@@ -195,11 +195,12 @@ ssize_t mlib_readchn(chnid_t chnid, void *buf, size_t size)
 {
 	int tbfsize;
 	int len;
-
+	
+	//流量限制
 	tbfsize = mytbf_fetchtoken(channel[chnid].tbf, size);
 
 	while(1){
-	
+		//pread从文件的指定偏移量开始读取数据，而不改变文件的当前读写位置（文件指针）。
 		len = pread(channel[chnid].fd, buf, tbfsize, channel[chnid].offset);
 		//当前chnid频道中的节目1不能读，给出警告，读取下一个节目
 		if(len < 0){							
@@ -209,14 +210,15 @@ ssize_t mlib_readchn(chnid_t chnid, void *buf, size_t size)
 		//当前chnid频道中的节目1正好读完，读取下一个节目
 		else if(len == 0){
 			syslog(LOG_DEBUG, "[medialib][mlib_readchn] meida file %s is over.", channel[chnid].mp3glob.gl_pathv[channel[chnid].pos]);
-			channel[chnid].offset = 0;
-			open_next(chnid);			//读取chnid频道的下一个节目
+			//channel[chnid].offset = 0;				//下一首歌重新从偏移量0的位置读取
+			open_next(chnid);
 		}
-		else{
+		else{			//成功读取len个字节
 			channel[chnid].offset += len;
 			break;
 		}
 	}
+	//返回没有用完的令牌
 	if(tbfsize - len > 0){
 		mytbf_returntoken(channel[chnid].tbf, tbfsize-len);
 	}

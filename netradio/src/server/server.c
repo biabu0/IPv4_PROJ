@@ -1,12 +1,25 @@
-#include<stdio.h>
-#include<stdlib.h>
-#include<unistd.h>
-#include<sys/types.h>
-#include<string.h>
-#include<errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
+#include <net/if.h>
+#include <fcntl.h>
+#include <syslog.h>
+#include <errno.h>
+#include <string.h>
+#include <signal.h>
+#include <getopt.h>
+#include <arpa/inet.h>
 
-#include"server_conf.h"
-#include<proto.h>
+#include "proto.h"
+#include "medialib.h"
+#include "server_conf.h"
+#include "thr_list.h"
+#include "thr_channel.h"
 
 /*
  *	-M		指定多播组
@@ -23,13 +36,14 @@
 
 struct server_conf_st server_conf = {.rcvport = DEFAULT_RCVPORT,\
 									.mgroup = DEFAULT_MGROUP,\
-									.media_dir = DEFAULT_MEDIA_DIR,\
-									.runmode = RUN_DAEMON,\    		//不方便进行单元测试或者模块测试
+									.media_dir = DEFAULT_MEDIADIR,\
+									.runmode = RUN_DAEMON,\
 									.ifname = DEFAULT_IF};
 
 
-int serversd;				//不能使用static 
+int serversd;				//不能使用static 在其他模块中依然会使用
 struct sockaddr_in sndaddr;
+static struct mlib_listentry_st *list;
 
 static void printf_help(void)
 {
@@ -51,14 +65,19 @@ static void printf_help(void)
 
 static void daemon_exit(int s)
 {
-
+	
+	thr_list_destroy();
+	thr_channel_destroyall();
+	mlib_freechnlist(list);
+	
+	syslog(LOG_WARNING, "signal-%d caught, exit now.", s);
 	closelog();
-
+	
 	exit(0);//正常终止
 }
 
 
-static int demonize(void)
+static int daemonize(void)
 {
 	
 	pid_t pid;
@@ -78,7 +97,7 @@ static int demonize(void)
 	if(fd < 0){
 //		perror("open()");			//此时还没有脱离控制终端，可以使用perror输出到stderr
 		syslog(LOG_WARNING, "open():%s", strerror(errno));			//失败无法重定向，给出警告
-	i	return -2;
+		return -2;
 	}
 	/*守护进程通常不需要从用户那里读取输入，也不应该将输出直接显示在终端上。通过重定向到 /dev/null，可以确保守护进程不会尝试读取标准输入或向标准输出和标准错误写入*/
 	/*如果守护进程将错误信息输出到日志文件，而没有任何限制，那么随着时间的推移，日志文件可能会变得非常大。重定向到 /dev/null 可以防止这种情况，因为 /dev/null 是一个黑洞设备，所有写入它的数据都会被丢弃。*/
@@ -99,7 +118,7 @@ static int demonize(void)
 	
 }
 
-static socket_init(void)
+static int socket_init(void)
 {
 	struct ip_mreqn mreq;
 
@@ -112,7 +131,7 @@ static socket_init(void)
 
 	//创建多播组
 	inet_pton(AF_INET, server_conf.mgroup, &mreq.imr_multiaddr);
-	inet_pton(AF_INET, "0.0.0.0", &mreq.imr_addr);
+	inet_pton(AF_INET, "0.0.0.0", &mreq.imr_address);
 	mreq.imr_ifindex = if_nametoindex(server_conf.ifname);
 	if(setsockopt(serversd, IPPROTO_IP, IP_MULTICAST_IF, &mreq, sizeof(mreq)) < 0){
 		syslog(LOG_ERR, "setsockopt(IP_MULTICAST_IF):%s",strerror(errno));
@@ -121,11 +140,19 @@ static socket_init(void)
 
 	//bind();			//主动端，不需要bind()
 
+	sndaddr.sin_family  = AF_INET;
+	sndaddr.sin_port = htons(atoi(server_conf.rcvport));			//接收端口
+	inet_pton(AF_INET, server_conf.mgroup, &sndaddr.sin_addr.s_addr);			//往组播的位置发送
+
+	return 0;
+
 }
 
 int main(int argc, char *argv[])
 {
 	int c;
+	int err;
+	int list_size;
 	struct sigaction sa;
 
 	sa.sa_handler = daemon_exit;
@@ -139,7 +166,7 @@ int main(int argc, char *argv[])
 	sigaction(SIGQUIT, &sa, NULL);
 
 	/*日志文件带哪些信息：PID信息，perror; 来源：DAEMON守护进程*/
-	opnelog("netradio", LOG_PID|LOG_PERROR, LOG_DAEMON);
+	openlog("netradio", LOG_PID|LOG_PERROR, LOG_DAEMON);
 	
 	while(1)
 	{
@@ -155,7 +182,7 @@ int main(int argc, char *argv[])
 				server_conf.rcvport = optarg;
 				break;
 			case 'F':
-				server_conf.runmode = RUN_FOREGROUD;
+				server_conf.runmode = RUN_FOREGROUND;
 				break;
 			case 'I':
 				server_conf.ifname = optarg;
@@ -195,32 +222,39 @@ int main(int argc, char *argv[])
 	socket_init();
 
 	/*	获取频道信息	*/
-	struct mlib_listentry_st *list;
-	int list_size;
-	int err;
 	err = mlib_getchnlist(&list, &list_size);
-	if(){
-		
+	if(err){
+		syslog(LOG_ERR,"[server][main] mlib_getchnlist():%s.", strerror(err));
+		exit(1);
 	}
+	syslog(LOG_INFO,"\n===================[server][main] get channel list success=====================\n");
 	/*	创建节目单线程	*/
 
-	thr_list_create(list, list_size);
-	/*if error*/
+	err = thr_list_create(list, list_size);
+	if(err){
+		syslog(LOG_ERR, "[server][main]thr_list_create():%s", strerror(errno));
+		exit(1);
+	}
+	
+	syslog(LOG_INFO, "\n==================[server][main] create list thread success==============\n");
 
 	/*	创建频道线程	*/			
 	//用一个线程发送200个频道信息，不怕延迟（一个包延迟后面的包还是会延迟的，依然连贯），怕延迟抖动（延迟时间或长或短，包的顺序可能改变）；64位系统，栈的大小128T，可以创建的线程非常的多，使用200个线程创建200个频道；
 	int i;
 	for(i = 0; i < list_size; i++){
-		thr_channel_create(list+i);
-		/* if error*/
+		err = thr_channel_create(list+i);
+		if(err){
+			syslog(LOG_ERR,"[server][main]thr_channel_create():%s", strerror(err));
+			exit(1);
+		}
 	}
 
 
-	syslog(LOG_DEBUG,"%d channel threads created.", i);				//提示
+	syslog(LOG_INFO,"\n====================[server][main] %d channel threads created.=======================", i);				//提示
 	
 
 	while(1)
-		pause(1);		//不会结束但也不至于频繁消耗资源
+		pause();		//不会结束但也不至于频繁消耗资源
 
 //	closelog();			//异常终止，执行不到，放入daemon_exit
 

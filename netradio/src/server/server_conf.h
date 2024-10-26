@@ -2,7 +2,7 @@
 #define SERVER_CONF_H__
 
 
-#define DEFAULT_MEDIADIR		"var/meida/"
+#define DEFAULT_MEDIADIR		"/var/media/"
 #define DEFAULT_IF 				"ens33"
 
 
@@ -20,10 +20,11 @@ struct server_conf_st
 	char *ifname;
 	char runmode;
 };
+//声明
 
 extern struct server_conf_st server_conf;
 extern int serversd;
-extern struct sockaddr_in sndaddr;
+extern struct sockaddr_in sndaddr;			//对端地址
 
 
 #endif

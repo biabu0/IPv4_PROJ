@@ -6,7 +6,7 @@
 #define DEFAULT_MGROUP      "224.2.2.2"                       //组播地址
 #define DEFAULT_RCVPORT     "2000"                            //默认端口
 
-#define CHNNR               "200"                            //总的频道个数
+#define CHNNR               200                           //总的频道个数
 #define LISTCHNID           0                                //特殊的频道号，发送节目单
 #define MINCHNID            1                                //频道ID
 #define MAXCHNID            (MINCHNID+CHNNR-1)

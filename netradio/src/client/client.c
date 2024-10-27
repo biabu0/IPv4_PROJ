@@ -36,9 +36,9 @@ static void printhelp(void)
 
 static ssize_t writen(int fd, const char *buf, size_t len)
 {
-    int ret;
-    int pos  = 0;
-    while(1){
+    int ret = 0;
+    int pos = 0;
+    while(len > 0){         //读取了内容就跳出循环
         ret = write(fd, buf+pos, len);
         if(ret < 0){
             if(errno == EINTR)
@@ -55,6 +55,7 @@ static ssize_t writen(int fd, const char *buf, size_t len)
 
 int main(int argc, char **argv)
 {
+    int result;
     pid_t pid;
     int pd[2];
     int index = 0;
@@ -165,6 +166,7 @@ int main(int argc, char **argv)
         exit(1);
         
     }
+    else{
 
     //父进程：从网络收包，发送给子进程
     
@@ -177,6 +179,8 @@ int main(int argc, char **argv)
         exit(1);
     }
 
+    //如果不加第一次打印地址可能是错误的，但后面应该就正确了
+    serveraddr_len = sizeof(serveraddr);
     int len;    
     while(1)
     {
@@ -204,12 +208,16 @@ int main(int argc, char **argv)
     
     //scanf放在循环中危险，如果输入‘a’，会放在缓冲区中取不出来，会一直在while中
     
+    puts("Please enter: ");
     int ret;
-    while(1){
+    while(ret < 1){
         ret = scanf("%d", &chosenid);
         if(ret != 1)
             exit(1);                        //做为异常终止的一种
     }
+
+
+    fprintf(stdout, "chosenid = %d\n", chosenid);        //不是守护进程可以用
 
     //收频道包，发送给子进程
     
@@ -222,6 +230,8 @@ int main(int argc, char **argv)
         exit(1);
     }
     
+    raddr_len = sizeof(raddr);
+
     while(1){
         len = recvfrom(sd, msg_channel, MSG_CHANNEL_MAX, 0, (void *)&raddr, &raddr_len);
         if(len < 0){
@@ -235,15 +245,17 @@ int main(int argc, char **argv)
         }
 
         if(len < sizeof(struct msg_channel_st)){            //两个字节都不到（边长的结构体）
-            fprintf(stderr, "aIgnore: message too small.\n");
+            fprintf(stderr, "Ignore: message too small.\n");
             continue;
         }
+        //
 
         if(msg_channel->chnid == chosenid)
         {
             fprintf(stdout,"accepted msg:%d recieved.\n", msg_channel->chnid);
             //writen函数，坚持写够多少个字节
-            if(writen(pd[1], msg_channel->data, len-sizeof(chnid_t)) < 0)
+            result = writen(pd[1], msg_channel->data, len-sizeof(chnid_t));
+            if(result < 0)
                 exit(1);
         }
         
@@ -254,50 +266,12 @@ int main(int argc, char **argv)
     close(sd);
 
     exit(0);
+    }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    exit(0);
 
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

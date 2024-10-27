@@ -47,6 +47,9 @@ static void *thr_channel_snder(void *ptr)
 			syslog(LOG_ERR, "[thr_channel][thr_channel_snder] chnid %d, sendto():%s", ent->chnid, strerror(errno));
 
 		}
+        else{
+            syslog(LOG_DEBUG, "[thr_channel][thr_channel_snder] thr_channel(%d): sendto() successed.", ent->chnid);
+        }
 		//while(1)死循环， 线程调度策略，主动出让调度器
 		//它用于主动让出处理器，允许其他线程或进程运行。这个调用告诉调度器，当前线程愿意放弃 CPU，使得调度器可以选择另一个线程来运行。
 		sched_yield();

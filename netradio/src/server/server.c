@@ -93,7 +93,7 @@ static int daemonize(void)
 	if(pid > 0)
 		exit(0);				//正常结束
 	
-	fd = open("dev/null", O_RDWR);
+	fd = open("/dev/null", O_RDWR);
 	if(fd < 0){
 //		perror("open()");			//此时还没有脱离控制终端，可以使用perror输出到stderr
 		syslog(LOG_WARNING, "open():%s", strerror(errno));			//失败无法重定向，给出警告
@@ -167,7 +167,7 @@ int main(int argc, char *argv[])
 
 	/*日志文件带哪些信息：PID信息，perror; 来源：DAEMON守护进程*/
 	openlog("netradio", LOG_PID|LOG_PERROR, LOG_DAEMON);
-	
+    
 	while(1)
 	{
 		/*命令行分析*/

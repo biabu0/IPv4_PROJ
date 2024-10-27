@@ -52,7 +52,7 @@ static void *thr_list(void *p)
 		entryp->len = htons(size);					//长度
 		strcpy(entryp->desc, list_ent[i].desc);
 		entryp = (void *)(((char *)entryp) + size);	//使其便宜到下一个节目单的位置，这里存放的节目单结构体数组的起始位置
-		syslog(LOG_DEBUG,"[thr_list][thr_list] entryp len :%d", entryp->len);
+//		syslog(LOG_DEBUG,"[thr_list][thr_list] entryp len :%d", entryp->len);
 	}
 
 	while(1){
@@ -61,7 +61,7 @@ static void *thr_list(void *p)
 			syslog(LOG_WARNING, "[thr_list][thr_list] sendto(serversd, entlistp.....:%s)", strerror(errno));
 		}
 		else{
-			syslog(LOG_DEBUG, "[thr_list][thr_list] sendto(serversd, entlistp....): successd");
+			syslog(LOG_DEBUG, "[thr_list][thr_list] sendto(serversd, entlistp....): successed");
 		}
 		sleep(1);			//每隔一秒发送一次节目单
 		

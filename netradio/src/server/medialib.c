@@ -54,7 +54,7 @@ static struct channel_context_st *path2entry(const char *path)
 		syslog(LOG_INFO, "[medialib][path2entry] %s is not a channel dir(Cannot fid desc.text)", path);
 		return NULL;
 	}
-	syslog(LOG_INFO, "fopen(): channel dir :%s.", path);
+	syslog(LOG_INFO, "[medialib][path2entry] fopen(): channel dir :%s.", path);
 	
 	//将desc内容读到linebuf中
 	if(fgets(linebuf, LINEBUFSIZE, fp) == NULL){
